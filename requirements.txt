@@ -1,0 +1,9 @@
+requests
+beautifulsoup4
+langchain
+langchain-community
+langchain-openai
+chromadb
+tiktoken
+gradio
+python-dotenv
