@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This project aims to make classic novels more accessible and engaging for readers. The primary motivation is to leverage Retrieval Augmented Generation (RAG) to allow users to quickly understand the plot of a story, ask specific questions, and even have conversations about the narrative. By transforming a novel like Moby Dick into an interactive experience, readers can explore its themes, characters, and plot points more dynamically.
+This project aims to make classic novels more accessible and engaging for readers. The primary motivation is to leverage Retrieval Augmented Generation (RAG) to allow users to quickly understand the plot of a story, ask specific questions, and even have conversations about the narrative. By transforming a novel like Moby Dick into an interactive experience, readers can explore its themes, characters, and plot points more dynamically. Although this project uses Moby Dick as a sample novel, the code is generic and can be adapted to RAG any book or any content that can be reliably scraped off any web page.
 
 The technical foundation of this project is a RAG system. This system comprises several key components: a data ingestion pipeline that fetches and processes the novel's text, a vectorization process that converts text chunks into numerical representations (embeddings), a vector store for efficient similarity searching of these embeddings, and a Large Language Model (LLM) that uses the retrieved context to generate answers and engage in conversation. For this project, we used Herman Melville's "Moby Dick; or, THE WHALE" from Project Gutenberg.
 
@@ -21,7 +21,7 @@ RAG addresses this by connecting the LLM to an external knowledge base. Here's a
 
 Below is a visual representation of this RAG process:
 
-<img src="rag_idea.jpg" width="50%">
+<img src="rag_idea.jpg" width="75%">
 
 
 This approach is crucial because it allows LLMs to provide more accurate, up-to-date, and contextually relevant responses, significantly reducing hallucinations and making them more reliable for specific domains or custom datasets.
@@ -81,3 +81,21 @@ python moby_dick_chatbot.py
 ```
 
 This will launch a Gradio interface. Typically, you will see a message in your terminal indicating the application is running, often providing a local URL (e.g., `Running on local URL: http://127.0.0.1:7860`). Open this URL in your web browser to interact with the chatbot.
+
+## 6. Regenerating the Vector Store
+
+If you need to re-process the source text (e.g., if the `moby_dick.txt` file changes or you want to experiment with different chunking or embedding strategies), you can regenerate the Chroma vector store.
+
+To do this, run the following script:
+
+```bash
+python process_moby_dick.py
+```
+
+This script will:
+1. Load the plain text file from the `books` folder.
+2. Split the text into chunks using Langchain.
+3. Vectorize these chunks.
+4. Save the resulting embeddings into the `chroma_db_moby_dick` vector store, overwriting any existing data in that store.
+
+**Note:** Regenerating the vector store can take some time, depending on the size of the text and the processing power of your machine.
