@@ -147,6 +147,9 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
     .small-accordion {
         margin-top: 10px;
         font-size: 0.85em;
+        width: 80% !important;
+        margin-left: auto;
+        margin-right: auto;
     }
     .small-accordion button {
         font-size: 0.8em !important;
@@ -154,9 +157,25 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
         opacity: 0.8;
         width: 100%;
         text-align: left;
+        font-weight: bold !important;
     }
     .small-accordion > div:nth-child(2) {
         padding: 8px !important;
+    }
+    .about-accordion .label-wrap span {
+        font-weight: bold !important;
+    }
+    /* Narrower sample question buttons with text wrapping */
+    .question-button {
+        width: 80% !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        white-space: normal !important;
+        height: auto !important;
+        min-height: 32px !important;
+        text-align: left !important;
+        font-size: 0.85em !important;
+        margin-bottom: 5px !important;
     }
     """) as demo:
     gr.Markdown("# Ask The One Big Beautiful Bill Anything! ⚖️")
@@ -177,7 +196,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
     with gr.Row():
         # Left column for chat interface
         with gr.Column(scale=3):
-            chatbot = gr.Chatbot(height=500, show_label=False)
+            chatbot = gr.Chatbot(height=600, show_label=False)
             msg = gr.Textbox(
                 placeholder="Ask me about any provision in the bill - I'll explain it in plain English...",
                 label="Your Question",
@@ -188,19 +207,20 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
         with gr.Column(scale=1):
             gr.Markdown("### 💡 Popular Questions")
             
-            # Create buttons for each sample question
+            # Create buttons for each sample question with full text and wrapping
             question_buttons = []
             for i, question in enumerate(sample_questions):
-                # Create a shortened version for the button label
-                short_label = question[:50] + "..." if len(question) > 50 else question
-                btn = gr.Button(short_label, size="sm", variant="secondary")
+                # Use full question text for the button label
+                btn = gr.Button(
+                    question, 
+                    size="sm", 
+                    variant="secondary", 
+                    elem_classes="question-button"
+                )
                 question_buttons.append((btn, question))
             
-            # Add some spacing
-            gr.Markdown("<br>")
-            
-            # Add About this chatbot accordion
-            with gr.Accordion("About this chatbot", open=False, elem_classes="small-accordion"):
+            # Add About this chatbot accordion after all the sample questions
+            with gr.Accordion("About this chatbot", open=False, elem_classes=["small-accordion", "about-accordion"]):
                 gr.Markdown("""
                 <div style="font-size: 0.85em; line-height: 1.4;">
                 <strong>What I can help you with:</strong>
@@ -269,7 +289,11 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
         yield chat_history, ""
     
     def use_sample_question(question, chat_history):
-        # Add the question to chat history
+        # Make a direct copy of respond function to ensure consistent behavior
+        if not question.strip():
+            return chat_history, ""
+        
+        # Add the user's question to show it immediately
         chat_history.append((question, "Analyzing your question"))
         yield chat_history, ""
         
@@ -298,12 +322,15 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
         chat_history[-1] = (question, result_container["response"])
         yield chat_history, ""
     
-    # Event handlers
-    msg.submit(respond, [msg, chatbot], [chatbot, msg])
+    # Event handlers for user input
+    msg.submit(
+        fn=respond,
+        inputs=[msg, chatbot], 
+        outputs=[chatbot, msg]
+    )
     
     # Connect each sample question button to automatically submit the question
     for btn, question in question_buttons:
-        # Use functools.partial to create a proper closure that works with generators
         btn.click(
             fn=partial(use_sample_question, question),
             inputs=[chatbot],
