@@ -1,14 +1,14 @@
 '''
 This script creates a Gradio chatbot UI to interact with the One Big Beautiful Bill vectorstore
-using gpt-4o-mini as the LLM and the Chroma DB as a RAG context.
+using Azure OpenAI as the LLM and Azure Cognitive Search as the RAG context.
 '''
 import os
 import gradio as gr
 from functools import partial
 import time
 import threading
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
+from langchain_community.vectorstores import AzureSearch
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
@@ -17,33 +17,78 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-CHROMA_DB_PATH = "chroma_db_bill_text"
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") # Ensure your OPENAI_API_KEY is set
+# Azure OpenAI Configuration
+AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
+AZURE_OPENAI_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-01")
+AZURE_OPENAI_CHAT_DEPLOYMENT = os.environ.get("AZURE_OPENAI_CHAT_DEPLOYMENT", "gpt-4o-mini")
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT = os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
+
+# Azure Cognitive Search Configuration
+AZURE_SEARCH_SERVICE_ENDPOINT = os.environ.get("AZURE_SEARCH_SERVICE_ENDPOINT")
+AZURE_SEARCH_API_KEY = os.environ.get("AZURE_SEARCH_API_KEY")
+AZURE_SEARCH_INDEX_NAME = os.environ.get("AZURE_SEARCH_INDEX_NAME", "bill-text-index")
+
+# Legacy configuration for backward compatibility
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")  # Keep for fallback
 LLM_MODEL = "gpt-4o-mini"
 
 # Global variable for the RAG chain
 rag_chain = None
 
 def initialize_chatbot():
-    '''Initializes the RAG chain for the chatbot.'''
+    '''Initializes the RAG chain for the chatbot using Azure OpenAI and Azure Cognitive Search.'''
     global rag_chain
-    if not OPENAI_API_KEY:
-        print("Error: OPENAI_API_KEY environment variable not set.")
+    
+    # Check Azure OpenAI configuration
+    if not AZURE_OPENAI_API_KEY:
+        print("Error: AZURE_OPENAI_API_KEY environment variable not set.")
         return False
-
-    if not os.path.exists(CHROMA_DB_PATH):
-        print(f"Error: Chroma DB not found at {CHROMA_DB_PATH}")
-        print("Please ensure 'process_doc.py' has been run successfully.")
+    
+    if not AZURE_OPENAI_ENDPOINT:
+        print("Error: AZURE_OPENAI_ENDPOINT environment variable not set.")
+        return False
+    
+    # Check Azure Cognitive Search configuration
+    if not AZURE_SEARCH_SERVICE_ENDPOINT:
+        print("Error: AZURE_SEARCH_SERVICE_ENDPOINT environment variable not set.")
+        return False
+    
+    if not AZURE_SEARCH_API_KEY:
+        print("Error: AZURE_SEARCH_API_KEY environment variable not set.")
         return False
 
     try:
-        print("Initializing OpenAI Embeddings and LLM...")
-        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        llm = ChatOpenAI(temperature=0.7, model_name=LLM_MODEL, openai_api_key=OPENAI_API_KEY)
+        print("Initializing Azure OpenAI Embeddings and LLM...")
+        
+        # Initialize Azure OpenAI Embeddings
+        embeddings = AzureOpenAIEmbeddings(
+            azure_deployment=AZURE_OPENAI_EMBEDDING_DEPLOYMENT,
+            openai_api_version=AZURE_OPENAI_API_VERSION,
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            api_key=AZURE_OPENAI_API_KEY
+        )
+        
+        # Initialize Azure OpenAI LLM
+        llm = AzureChatOpenAI(
+            azure_deployment=AZURE_OPENAI_CHAT_DEPLOYMENT,
+            openai_api_version=AZURE_OPENAI_API_VERSION,
+            azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            api_key=AZURE_OPENAI_API_KEY,
+            temperature=0.7
+        )
 
-        print(f"Loading Chroma vectorstore from {CHROMA_DB_PATH}...")
-        vectorstore = Chroma(persist_directory=CHROMA_DB_PATH, embedding_function=embeddings)
-        print("Vectorstore loaded successfully.")
+        print(f"Loading Azure Cognitive Search vectorstore from {AZURE_SEARCH_SERVICE_ENDPOINT}...")
+        
+        # Initialize Azure Cognitive Search vectorstore
+        vectorstore = AzureSearch(
+            azure_search_endpoint=AZURE_SEARCH_SERVICE_ENDPOINT,
+            azure_search_key=AZURE_SEARCH_API_KEY,
+            index_name=AZURE_SEARCH_INDEX_NAME,
+            embedding_function=embeddings.embed_query
+        )
+        
+        print("Azure vectorstore loaded successfully.")
 
         # Create a retriever
         retriever = vectorstore.as_retriever()
@@ -186,8 +231,16 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
         **⚠️ System Unavailable**
         
         The analysis system could not be initialized. Please ensure:
-        - Your `OPENAI_API_KEY` is properly set as an environment variable
-        - The bill text vector database exists (run `process_doc.py` first to create it)
+        - Your Azure OpenAI credentials are properly set:
+          - `AZURE_OPENAI_API_KEY`: Your Azure OpenAI API key
+          - `AZURE_OPENAI_ENDPOINT`: Your Azure OpenAI endpoint URL
+          - `AZURE_OPENAI_CHAT_DEPLOYMENT`: Your chat completion deployment name (default: gpt-4o-mini)
+          - `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`: Your embedding deployment name (default: text-embedding-ada-002)
+        - Your Azure Cognitive Search credentials are properly set:
+          - `AZURE_SEARCH_SERVICE_ENDPOINT`: Your Azure Cognitive Search service endpoint
+          - `AZURE_SEARCH_API_KEY`: Your Azure Cognitive Search API key
+          - `AZURE_SEARCH_INDEX_NAME`: Your search index name (default: bill-text-index)
+        - The bill text has been indexed in Azure Cognitive Search (run updated `process_doc.py` first)
         - Check the terminal for detailed error messages
         
         You may need to restart this application after resolving these issues.
@@ -233,7 +286,7 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
                 
                 <strong>My commitment:</strong> I prioritize accuracy and fairness. I'll only use information from the actual bill text and will clearly indicate when I cannot answer based on available context.
                 
-                <em>The chatbot uses advanced RAG (Retrieval-Augmented Generation) with a vector database of the complete bill text.</em>
+                <em>The chatbot uses advanced RAG (Retrieval-Augmented Generation) with Azure OpenAI and Azure Cognitive Search vector database of the complete bill text.</em>
                 </div>
                 """)
     
@@ -337,27 +390,35 @@ with gr.Blocks(theme=gr.themes.Soft(), css="""
             outputs=[chatbot, msg]
         )
             
-    # Add OpenAI attribution
+    # Add Azure OpenAI attribution
     with gr.Row():
         with gr.Column():
             gr.Markdown("""
             <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0; color: #666; font-size: 0.8em;">
-            AI-generated content powered by OpenAI
+            AI-generated content powered by Azure OpenAI • Search powered by Azure Cognitive Search
             </div>
             """)
 
 if __name__ == "__main__":
-    if not OPENAI_API_KEY:
-        print("CRITICAL ERROR: OPENAI_API_KEY is not set. The application will not work.")
-        print("Please set it as an environment variable:")
-        print("  PowerShell: $Env:OPENAI_API_KEY='your_api_key_here'")
-        print("  Bash/Zsh:   export OPENAI_API_KEY='your_api_key_here'")
+    if not AZURE_OPENAI_API_KEY:
+        print("CRITICAL ERROR: AZURE_OPENAI_API_KEY is not set. The application will not work.")
+        print("Please set the required Azure environment variables:")
+        print("  PowerShell:")
+        print("    $Env:AZURE_OPENAI_API_KEY='your_azure_openai_api_key_here'")
+        print("    $Env:AZURE_OPENAI_ENDPOINT='https://your-resource.openai.azure.com/'")
+        print("    $Env:AZURE_SEARCH_SERVICE_ENDPOINT='https://your-search-service.search.windows.net'")
+        print("    $Env:AZURE_SEARCH_API_KEY='your_search_api_key_here'")
+        print("  Bash/Zsh:")
+        print("    export AZURE_OPENAI_API_KEY='your_azure_openai_api_key_here'")
+        print("    export AZURE_OPENAI_ENDPOINT='https://your-resource.openai.azure.com/'")
+        print("    export AZURE_SEARCH_SERVICE_ENDPOINT='https://your-search-service.search.windows.net'")
+        print("    export AZURE_SEARCH_API_KEY='your_search_api_key_here'")
 
-    print("Launching Bill Analysis Interface...")
+    print("Launching Bill Analysis Interface with Azure OpenAI and Azure Cognitive Search...")
     if initialization_successful:
         print("Analysis system initialized successfully. Gradio interface launching.")
     else:
         print("Analysis system failed to initialize. Gradio will launch with an error message.")
-        print("Please check for OPENAI_API_KEY and ensure the Chroma DB exists.")
+        print("Please check for Azure OpenAI and Azure Cognitive Search credentials.")
 
     demo.launch()

@@ -3,7 +3,8 @@ beautifulsoup4
 langchain
 langchain-community
 langchain-openai
-chromadb
+azure-search-documents
+azure-identity
 tiktoken
 gradio
 python-dotenv
